@@ -1,0 +1,7 @@
+{
+  "tag_name": "v1.0.0",
+  "name": "v1.0.0 - Initial Release",
+  "body": "## v1.0.0 - Initial Release\n\n### Features\n- **Magnetic Snap Zones** - Drag windows to screen edges and corners to snap them into position\n  - Left/Right halves\n  - Top-Left, Top-Right, Bottom-Left, Bottom-Right quarters\n  - Maximize on top edge\n- **Keyboard Shortcuts** - Full keyboard control for window layouts\n  - Halves: `⌃⌥←→↑↓`\n  - Quarters: `⌃⌥U/I/J/K`\n  - Maximize: `⌃⌥↩`\n  - Center: `⌃⌥C`\n  - Thirds: `⌃⌥D/F/G`\n- **Window Switcher** - Alt+Tab style window switching with `⌥Tab`\n  - Grid view of all windows\n  - Keyboard navigation with arrows and Tab\n  - Release Option to select\n- **Menu Bar Integration** - Quick access to all layouts\n- **Settings Panel** - Customize hotkeys and preferences\n\n### Known Issues\n- Search functionality in window switcher is temporarily disabled\n- Bottom corner snap zones may require precise positioning near screen edge\n\nFull Changelog: https://github.com/sahajquinci/WindowManager/commits/v1.0.0",
+  "draft": false,
+  "prerelease": false
+}

@@ -1,0 +1,26 @@
+# Build output
+build/
+DerivedData/
+
+# Xcode
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# DMG (keep for releases but don't track by default)
+# WindowManager.dmg
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Test output
+*.xcresult
