@@ -20,8 +20,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
     
     // Track window usage order (most recently used first)
-    // Stores process ID and window title as a unique identifier
-    private var mruWindowOrder: [(pid: pid_t, title: String)] = []
+    // Stores process ID and windowID as a stable identifier (titles change with tabs)
+    private var mruWindowOrder: [(pid: pid_t, windowID: CGWindowID)] = []
     
     // For Option+Tab quick switching
     private var optionKeyMonitor: Any?
@@ -374,13 +374,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         var windows = windowManager.getAllWindows()
         
-        // Sort windows by MRU order
+        // Sort windows by MRU order using windowID (stable identifier, unlike titles)
         windows.sort { window1, window2 in
-            let key1 = (pid: window1.processIdentifier, title: window1.title)
-            let key2 = (pid: window2.processIdentifier, title: window2.title)
-            
-            let index1 = mruWindowOrder.firstIndex { $0.pid == key1.pid && $0.title == key1.title } ?? Int.max
-            let index2 = mruWindowOrder.firstIndex { $0.pid == key2.pid && $0.title == key2.title } ?? Int.max
+            let index1 = mruWindowOrder.firstIndex { $0.pid == window1.processIdentifier && $0.windowID == window1.windowID } ?? Int.max
+            let index2 = mruWindowOrder.firstIndex { $0.pid == window2.processIdentifier && $0.windowID == window2.windowID } ?? Int.max
             
             return index1 < index2
         }
@@ -533,10 +530,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func updateMRUOrder(window: WindowInfo) {
-        let key = (pid: window.processIdentifier, title: window.title)
+        let key = (pid: window.processIdentifier, windowID: window.windowID)
         
-        // Remove if already exists
-        mruWindowOrder.removeAll { $0.pid == key.pid && $0.title == key.title }
+        // Remove if already exists (using windowID for stable identification)
+        mruWindowOrder.removeAll { $0.pid == key.pid && $0.windowID == key.windowID }
         
         // Insert at the front
         mruWindowOrder.insert(key, at: 0)

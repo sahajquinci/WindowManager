@@ -36,14 +36,40 @@ class WindowManager {
             return []
         }
         
-        // Build a map of window order by PID and window name
-        var windowOrder: [(pid: pid_t, name: String, index: Int)] = []
+        // Build a map of window order and IDs by PID, owner name, bounds
+        struct CGWindowInfo {
+            let pid: pid_t
+            let ownerName: String
+            let name: String
+            let index: Int
+            let windowID: CGWindowID
+            let bounds: CGRect
+            var used: Bool
+        }
+        
+        var cgWindows: [CGWindowInfo] = []
         for (index, windowInfo) in windowList.enumerated() {
             if let pid = windowInfo[kCGWindowOwnerPID as String] as? pid_t,
                let layer = windowInfo[kCGWindowLayer as String] as? Int,
+               let windowID = windowInfo[kCGWindowNumber as String] as? CGWindowID,
                layer == 0 { // Normal window layer
                 let name = windowInfo[kCGWindowName as String] as? String ?? ""
-                windowOrder.append((pid: pid, name: name, index: index))
+                let ownerName = windowInfo[kCGWindowOwnerName as String] as? String ?? ""
+                
+                // Get window bounds
+                var bounds = CGRect.zero
+                if let boundsDict = windowInfo[kCGWindowBounds as String] as? [String: Any],
+                   let x = boundsDict["X"] as? CGFloat,
+                   let y = boundsDict["Y"] as? CGFloat,
+                   let width = boundsDict["Width"] as? CGFloat,
+                   let height = boundsDict["Height"] as? CGFloat {
+                    bounds = CGRect(x: x, y: y, width: width, height: height)
+                }
+                
+                cgWindows.append(CGWindowInfo(
+                    pid: pid, ownerName: ownerName, name: name,
+                    index: index, windowID: windowID, bounds: bounds, used: false
+                ))
             }
         }
         
@@ -53,6 +79,7 @@ class WindowManager {
         
         for app in runningApps {
             let appElement = AXUIElementCreateApplication(app.processIdentifier)
+            let appName = app.localizedName ?? ""
             
             var windowsRef: CFTypeRef?
             let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsRef)
@@ -64,6 +91,24 @@ class WindowManager {
                 var titleRef: CFTypeRef?
                 AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef)
                 let title = titleRef as? String ?? ""
+                
+                // Get window position and size for matching
+                var positionRef: CFTypeRef?
+                var sizeRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionRef)
+                AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeRef)
+                
+                var axBounds = CGRect.zero
+                if let positionValue = positionRef {
+                    var point = CGPoint.zero
+                    AXValueGetValue(positionValue as! AXValue, .cgPoint, &point)
+                    axBounds.origin = point
+                }
+                if let sizeValue = sizeRef {
+                    var size = CGSize.zero
+                    AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+                    axBounds.size = size
+                }
                 
                 // Check if minimized - we'll include them but mark them
                 var minimizedRef: CFTypeRef?
@@ -79,26 +124,93 @@ class WindowManager {
                 if role != "AXWindow" && !role.isEmpty { continue }
                 
                 // Use app name for untitled windows
-                var displayTitle = title.isEmpty ? (app.localizedName ?? "Untitled") : title
+                var displayTitle = title.isEmpty ? appName : title
                 
                 // Mark minimized windows
                 if isMinimized {
                     displayTitle = "🔻 " + displayTitle
                 }
                 
-                // Find the order index for this window
-                let orderIndex = windowOrder.firstIndex(where: { 
-                    $0.pid == app.processIdentifier && ($0.name == title || $0.name == displayTitle.replacingOccurrences(of: "🔻 ", with: ""))
-                }).map { windowOrder[$0].index } ?? Int.max
+                // Helper to check if bounds match (within tolerance for rounding)
+                func boundsMatch(_ a: CGRect, _ b: CGRect) -> Bool {
+                    let tolerance: CGFloat = 5
+                    return abs(a.origin.x - b.origin.x) < tolerance &&
+                           abs(a.origin.y - b.origin.y) < tolerance &&
+                           abs(a.width - b.width) < tolerance &&
+                           abs(a.height - b.height) < tolerance
+                }
                 
-                let info = WindowInfo(
+                // Find matching CG window - prioritize by bounds matching
+                var matchIndex: Int? = nil
+                
+                // Strategy 1: Match by bounds + PID (most reliable)
+                if matchIndex == nil && axBounds.width > 0 {
+                    matchIndex = cgWindows.firstIndex(where: {
+                        !$0.used && $0.pid == app.processIdentifier && boundsMatch($0.bounds, axBounds)
+                    })
+                }
+                
+                // Strategy 2: Match by bounds + owner name (for multi-process apps)
+                if matchIndex == nil && axBounds.width > 0 {
+                    matchIndex = cgWindows.firstIndex(where: {
+                        !$0.used && $0.ownerName == appName && boundsMatch($0.bounds, axBounds)
+                    })
+                }
+                
+                // Strategy 3: Exact title match by PID
+                if matchIndex == nil {
+                    matchIndex = cgWindows.firstIndex(where: {
+                        !$0.used && $0.pid == app.processIdentifier && $0.name == title && !title.isEmpty
+                    })
+                }
+                
+                // Strategy 4: Exact title match by owner name
+                if matchIndex == nil {
+                    matchIndex = cgWindows.firstIndex(where: {
+                        !$0.used && $0.ownerName == appName && $0.name == title && !title.isEmpty
+                    })
+                }
+                
+                // Strategy 5: Any unused window for this PID
+                if matchIndex == nil {
+                    matchIndex = cgWindows.firstIndex(where: {
+                        !$0.used && $0.pid == app.processIdentifier
+                    })
+                }
+                
+                // Strategy 6: Any unused window for this owner name
+                if matchIndex == nil {
+                    matchIndex = cgWindows.firstIndex(where: {
+                        !$0.used && $0.ownerName == appName
+                    })
+                }
+                
+                var orderIndex = Int.max
+                var windowID: CGWindowID = 0
+                
+                if let idx = matchIndex {
+                    orderIndex = cgWindows[idx].index
+                    windowID = cgWindows[idx].windowID
+                    cgWindows[idx].used = true  // Mark as used
+                }
+                
+                // Capture thumbnail for the window (requires Screen Recording permission)
+                var thumbnail: NSImage? = nil
+                if windowID > 0 {
+                    thumbnail = WindowInfo.captureThumbnail(windowID: windowID)
+                }
+                
+                var info = WindowInfo(
                     window: window,
                     title: displayTitle,
-                    appName: app.localizedName ?? "Unknown",
+                    appName: appName.isEmpty ? "Unknown" : appName,
                     appIcon: app.icon,
                     processIdentifier: app.processIdentifier,
                     orderIndex: orderIndex
                 )
+                info.thumbnail = thumbnail
+                info.windowID = windowID
+                info.bounds = axBounds
                 windowInfos.append(info)
             }
         }

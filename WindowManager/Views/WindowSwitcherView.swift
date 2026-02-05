@@ -16,8 +16,8 @@ class WindowSwitcherState: ObservableObject {
     @Published var isVerticalMode: Bool = false
     @Published var filteredWindows: [WindowInfo] = []
     
-    // Grid layout info - 4 columns based on 600px width with 120-150px items
-    let columnsPerRow: Int = 4
+    // Grid layout info - 3 columns for larger preview cards
+    let columnsPerRow: Int = 3
     
     init(windows: [WindowInfo], onSelect: @escaping (WindowInfo) -> Void, onDismiss: @escaping () -> Void) {
         self.windows = windows
@@ -370,10 +370,10 @@ struct WindowSwitcherView: View {
                     }
                 }
             } else {
-                // Grid mode (like Alt+Tab)
+                // Grid mode (like Windows Alt+Tab with previews)
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 150))], spacing: 12) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 196, maximum: 220))], spacing: 16) {
                             ForEach(Array(state.filteredWindows.enumerated()), id: \.element.id) { index, window in
                                 WindowGridItem(
                                     window: window,
@@ -419,7 +419,7 @@ struct WindowSwitcherView: View {
             .padding(.vertical, 8)
             .background(Color(nsColor: .controlBackgroundColor))
         }
-        .frame(width: 600, height: 400)
+        .frame(width: 700, height: 500)
         .background(VisualEffectView(material: .hudWindow, blendingMode: .behindWindow))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.3), radius: 20)
@@ -471,41 +471,54 @@ struct WindowGridItem: View {
     let isSelected: Bool
     
     var body: some View {
-        VStack(spacing: 8) {
-            // App icon
+        VStack(spacing: 6) {
+            // Window thumbnail preview
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.gray.opacity(0.1))
-                    .frame(width: 64, height: 64)
+                    .fill(Color.black.opacity(0.3))
+                    .frame(width: 180, height: 120)
                 
-                if let icon = window.appIcon {
-                    Image(nsImage: icon)
+                if let thumbnail = window.thumbnail {
+                    Image(nsImage: thumbnail)
                         .resizable()
-                        .frame(width: 48, height: 48)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 176, height: 116)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                 } else {
-                    Image(systemName: "app")
-                        .font(.system(size: 32))
+                    // Fallback to large app icon if no thumbnail
+                    if let icon = window.appIcon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .frame(width: 64, height: 64)
+                    } else {
+                        Image(systemName: "macwindow")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             
-            VStack(spacing: 2) {
+            // App info below the preview
+            HStack(spacing: 6) {
+                if let icon = window.appIcon {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                }
+                
                 Text(window.title)
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
-                
-                Text(window.appName)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
+            .frame(maxWidth: 180)
         }
-        .frame(width: 120)
         .padding(8)
-        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-        .cornerRadius(8)
+        .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
+        .cornerRadius(10)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
         )
     }
 }

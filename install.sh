@@ -15,9 +15,12 @@ cd "$SCRIPT_DIR"
 pkill -f "WindowManager$" 2>/dev/null || true
 sleep 0.3
 
-# Reset accessibility permissions for this app (so user just needs to toggle, not re-add)
-echo "🔐 Resetting accessibility entry..."
+# Reset permissions for this app (so user just needs to toggle, not re-add)
+echo "🔐 Resetting accessibility permissions..."
 tccutil reset Accessibility "$BUNDLE_ID" 2>/dev/null || true
+
+echo "🔐 Resetting screen recording permissions..."
+tccutil reset ScreenCapture "$BUNDLE_ID" 2>/dev/null || true
 
 # Build release version
 xcodebuild -scheme WindowManager -configuration Release build -quiet
@@ -38,12 +41,17 @@ cp -R "$APP_PATH" /Applications/
 echo "🚀 Launching WindowManager..."
 open /Applications/WindowManager.app
 
-# Open accessibility settings
+# Open privacy settings
 sleep 1
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 
 echo ""
 echo "✅ WindowManager installed!"
 echo ""
-echo "👉 Enable WindowManager in the Accessibility settings window that just opened"
+echo "👉 Enable WindowManager in the settings windows:"
+echo "   1. Privacy & Security > Accessibility (required)"
+echo "   2. Privacy & Security > Screen Recording (for window previews)"
+echo ""
+echo "💡 Tip: Open Screen Recording settings with:"
+echo "   open 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'"
 echo ""
