@@ -19,7 +19,7 @@ struct WindowInfo: Identifiable {
 
 extension WindowInfo {
     /// Capture a thumbnail of this window
-    static func captureThumbnail(windowID: CGWindowID, maxSize: CGSize = CGSize(width: 300, height: 200)) -> NSImage? {
+    static func captureThumbnail(windowID: CGWindowID, maxSize: CGSize = CGSize(width: 600, height: 400)) -> NSImage? {
         // Capture the window image
         guard let cgImage = CGWindowListCreateImage(
             .null,

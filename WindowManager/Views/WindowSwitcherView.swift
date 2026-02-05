@@ -373,7 +373,7 @@ struct WindowSwitcherView: View {
                 // Grid mode (like Windows Alt+Tab with previews)
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 196, maximum: 220))], spacing: 16) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 320, maximum: 360))], spacing: 20) {
                             ForEach(Array(state.filteredWindows.enumerated()), id: \.element.id) { index, window in
                                 WindowGridItem(
                                     window: window,
@@ -419,10 +419,10 @@ struct WindowSwitcherView: View {
             .padding(.vertical, 8)
             .background(Color(nsColor: .controlBackgroundColor))
         }
-        .frame(width: 700, height: 500)
+        .frame(width: 1200, height: 800)
         .background(VisualEffectView(material: .hudWindow, blendingMode: .behindWindow))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.3), radius: 20)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.4), radius: 30)
         .onChange(of: state.searchText) { _, _ in
             state.resetSelection()
         }
@@ -471,54 +471,54 @@ struct WindowGridItem: View {
     let isSelected: Bool
     
     var body: some View {
-        VStack(spacing: 6) {
-            // Window thumbnail preview
+        VStack(spacing: 10) {
+            // Window thumbnail preview - large size for clarity
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 10)
                     .fill(Color.black.opacity(0.3))
-                    .frame(width: 180, height: 120)
+                    .frame(width: 300, height: 200)
                 
                 if let thumbnail = window.thumbnail {
                     Image(nsImage: thumbnail)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 176, height: 116)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .frame(width: 294, height: 194)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 } else {
                     // Fallback to large app icon if no thumbnail
                     if let icon = window.appIcon {
                         Image(nsImage: icon)
                             .resizable()
-                            .frame(width: 64, height: 64)
+                            .frame(width: 80, height: 80)
                     } else {
                         Image(systemName: "macwindow")
-                            .font(.system(size: 48))
+                            .font(.system(size: 64))
                             .foregroundColor(.secondary)
                     }
                 }
             }
             
             // App info below the preview
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 if let icon = window.appIcon {
                     Image(nsImage: icon)
                         .resizable()
-                        .frame(width: 16, height: 16)
+                        .frame(width: 20, height: 20)
                 }
                 
                 Text(window.title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            .frame(maxWidth: 180)
+            .frame(maxWidth: 300)
         }
-        .padding(8)
+        .padding(12)
         .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
-        .cornerRadius(10)
+        .cornerRadius(14)
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 4)
         )
     }
 }

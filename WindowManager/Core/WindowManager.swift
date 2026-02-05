@@ -1,6 +1,10 @@
 import AppKit
 import ApplicationServices
 
+// Private API to get CGWindowID from AXUIElement - much more reliable than matching
+@_silgen_name("_AXUIElementGetWindow")
+func _AXUIElementGetWindow(_ element: AXUIElement, _ windowID: UnsafeMutablePointer<CGWindowID>) -> AXError
+
 /// Core window management using macOS Accessibility API
 class WindowManager {
     
@@ -131,67 +135,17 @@ class WindowManager {
                     displayTitle = "🔻 " + displayTitle
                 }
                 
-                // Helper to check if bounds match (within tolerance for rounding)
-                func boundsMatch(_ a: CGRect, _ b: CGRect) -> Bool {
-                    let tolerance: CGFloat = 5
-                    return abs(a.origin.x - b.origin.x) < tolerance &&
-                           abs(a.origin.y - b.origin.y) < tolerance &&
-                           abs(a.width - b.width) < tolerance &&
-                           abs(a.height - b.height) < tolerance
-                }
-                
-                // Find matching CG window - prioritize by bounds matching
-                var matchIndex: Int? = nil
-                
-                // Strategy 1: Match by bounds + PID (most reliable)
-                if matchIndex == nil && axBounds.width > 0 {
-                    matchIndex = cgWindows.firstIndex(where: {
-                        !$0.used && $0.pid == app.processIdentifier && boundsMatch($0.bounds, axBounds)
-                    })
-                }
-                
-                // Strategy 2: Match by bounds + owner name (for multi-process apps)
-                if matchIndex == nil && axBounds.width > 0 {
-                    matchIndex = cgWindows.firstIndex(where: {
-                        !$0.used && $0.ownerName == appName && boundsMatch($0.bounds, axBounds)
-                    })
-                }
-                
-                // Strategy 3: Exact title match by PID
-                if matchIndex == nil {
-                    matchIndex = cgWindows.firstIndex(where: {
-                        !$0.used && $0.pid == app.processIdentifier && $0.name == title && !title.isEmpty
-                    })
-                }
-                
-                // Strategy 4: Exact title match by owner name
-                if matchIndex == nil {
-                    matchIndex = cgWindows.firstIndex(where: {
-                        !$0.used && $0.ownerName == appName && $0.name == title && !title.isEmpty
-                    })
-                }
-                
-                // Strategy 5: Any unused window for this PID
-                if matchIndex == nil {
-                    matchIndex = cgWindows.firstIndex(where: {
-                        !$0.used && $0.pid == app.processIdentifier
-                    })
-                }
-                
-                // Strategy 6: Any unused window for this owner name
-                if matchIndex == nil {
-                    matchIndex = cgWindows.firstIndex(where: {
-                        !$0.used && $0.ownerName == appName
-                    })
-                }
-                
-                var orderIndex = Int.max
+                // Get CGWindowID directly from AXUIElement using private API
+                // This is MUCH more reliable than trying to match by bounds/title
                 var windowID: CGWindowID = 0
+                let axResult = _AXUIElementGetWindow(window, &windowID)
                 
-                if let idx = matchIndex {
-                    orderIndex = cgWindows[idx].index
-                    windowID = cgWindows[idx].windowID
-                    cgWindows[idx].used = true  // Mark as used
+                // Find this window's order in the CGWindowList
+                var orderIndex = Int.max
+                if axResult == .success && windowID > 0 {
+                    if let cgIndex = cgWindows.firstIndex(where: { $0.windowID == windowID }) {
+                        orderIndex = cgWindows[cgIndex].index
+                    }
                 }
                 
                 // Capture thumbnail for the window (requires Screen Recording permission)
