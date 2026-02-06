@@ -84,7 +84,7 @@ class MouseTracker {
         // Detect snap zone
         if let zone = snapZoneManager.detectZone(at: location) {
             if zone != snapZoneManager.currentZone {
-                snapZoneManager.showOverlay(for: zone)
+                snapZoneManager.showOverlay(for: zone, at: location)
             }
         } else {
             snapZoneManager.hideOverlay()

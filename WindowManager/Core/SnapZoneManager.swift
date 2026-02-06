@@ -7,9 +7,21 @@ class SnapZoneManager {
     private var overlayWindow: SnapOverlayWindow?
     
     var currentZone: SnapZone?
+    var currentScreen: NSScreen?  // Track which screen we're snapping to
     
     init(settings: WindowManagerSettings) {
         self.settings = settings
+    }
+    
+    /// Get the screen containing the given point
+    func screenForPoint(_ point: CGPoint) -> NSScreen? {
+        for screen in NSScreen.screens {
+            if screen.frame.contains(point) {
+                return screen
+            }
+        }
+        // Fallback to main screen if point is outside all screens
+        return NSScreen.main
     }
     
     enum SnapZone: Equatable {
@@ -26,10 +38,8 @@ class SnapZoneManager {
         case rightThird
         case maximize
         
-        var frame: CGRect {
-            guard let screen = NSScreen.main else { return .zero }
+        func frame(for screen: NSScreen, padding: CGFloat = 8) -> CGRect {
             let screenFrame = screen.visibleFrame
-            let padding: CGFloat = 8
             
             switch self {
             case .leftHalf:
@@ -120,10 +130,17 @@ class SnapZoneManager {
                 )
             }
         }
+        
+        // Legacy computed property for backward compatibility
+        var frame: CGRect {
+            guard let screen = NSScreen.main else { return .zero }
+            return self.frame(for: screen)
+        }
     }
     
     func detectZone(at point: CGPoint) -> SnapZone? {
-        guard let screen = NSScreen.main else { return nil }
+        // Use the screen where the cursor is located
+        guard let screen = screenForPoint(point) else { return nil }
         let screenFrame = screen.frame
         
         let edgeThreshold: CGFloat = 50
@@ -171,30 +188,30 @@ class SnapZoneManager {
         return nil
     }
     
-    func showOverlay(for zone: SnapZone) {
+    func showOverlay(for zone: SnapZone, at point: CGPoint) {
         if overlayWindow == nil {
             overlayWindow = SnapOverlayWindow()
         }
         
         currentZone = zone
-        overlayWindow?.showZone(zone.frame)
+        currentScreen = screenForPoint(point)
+        
+        if let screen = currentScreen {
+            overlayWindow?.showZone(zone.frame(for: screen))
+        }
     }
     
     func hideOverlay() {
         overlayWindow?.hide()
         currentZone = nil
+        currentScreen = nil
     }
     
     func getZoneFrame(_ zone: SnapZone) -> CGRect {
         let padding = CGFloat(settings.windowPadding)
-        var frame = zone.frame
+        guard let screen = currentScreen ?? NSScreen.main else { return .zero }
         
-        // Apply custom padding
-        frame.origin.x += (padding - 8)
-        frame.origin.y += (padding - 8)
-        frame.size.width -= (padding - 8) * 2
-        frame.size.height -= (padding - 8) * 2
-        
+        var frame = zone.frame(for: screen, padding: padding)
         return frame
     }
 }

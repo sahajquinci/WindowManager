@@ -85,7 +85,7 @@ class WindowManagerSettings: ObservableObject {
         self.launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         self.showInDock = defaults.object(forKey: "showInDock") as? Bool ?? false
         
-        self.enableMagneticSnap = defaults.object(forKey: "enableMagneticSnap") as? Bool ?? true
+        self.enableMagneticSnap = defaults.object(forKey: "enableMagneticSnap") as? Bool ?? false
         self.windowPadding = defaults.object(forKey: "windowPadding") as? Int ?? 8
         self.enableAnimations = defaults.object(forKey: "enableAnimations") as? Bool ?? true
         self.animationDuration = defaults.object(forKey: "animationDuration") as? Double ?? 0.15
@@ -115,7 +115,7 @@ class WindowManagerSettings: ObservableObject {
     func resetToDefaults() {
         launchAtLogin = false
         showInDock = false
-        enableMagneticSnap = true
+        enableMagneticSnap = false
         windowPadding = 8
         enableAnimations = true
         animationDuration = 0.15

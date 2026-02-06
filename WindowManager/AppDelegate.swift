@@ -19,10 +19,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private var cancellables = Set<AnyCancellable>()
     
-    // Track window usage order (most recently used first)
-    // Stores process ID and windowID as a stable identifier (titles change with tabs)
-    private var mruWindowOrder: [(pid: pid_t, windowID: CGWindowID)] = []
-    
     // For Option+Tab quick switching
     private var optionKeyMonitor: Any?
     private var currentSwitcherState: WindowSwitcherState?
@@ -42,6 +38,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Check accessibility permissions
         checkAccessibilityPermissions()
         
+        // Trigger Screen Recording permission prompt by attempting a capture
+        triggerScreenRecordingPermission()
+        
         // Register hotkeys
         setupHotKeys()
         
@@ -52,6 +51,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Observe settings changes
         observeSettingsChanges()
+    }
+    
+    private func triggerScreenRecordingPermission() {
+        // Attempt to capture any window to trigger the Screen Recording permission prompt
+        // This happens in the background and the result is discarded
+        DispatchQueue.global(qos: .background).async {
+            let options = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
+            if let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]],
+               let firstWindow = windowList.first,
+               let windowID = firstWindow[kCGWindowNumber as String] as? CGWindowID {
+                // This call triggers the Screen Recording permission prompt
+                let _ = CGWindowListCreateImage(.null, .optionIncludingWindow, windowID, [.boundsIgnoreFraming])
+            }
+        }
     }
     
     private func setupMenuBar() {
@@ -150,25 +163,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         let accessibilityEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
         
-        if !accessibilityEnabled {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                self.showAccessibilityAlert()
-            }
-        }
-    }
-    
-    private func showAccessibilityAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Accessibility Access Required"
-        alert.informativeText = "WindowManager needs accessibility access to manage your windows. Please grant access in System Settings > Privacy & Security > Accessibility."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Later")
-        
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-        }
+        // System will show its own accessibility prompt automatically
+        // No need for a custom alert
     }
     
     private func setupHotKeys() {
@@ -361,30 +357,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @objc func showWindowSwitcher() {
         // If panel exists and Option+Tab pressed again, cycle to next window
-        if let panel = windowSwitcherPanel, let state = currentSwitcherState {
+        if let _ = windowSwitcherPanel, let state = currentSwitcherState {
             state.moveRight()
+            return
+        }
+        
+        // Check if Option key is currently pressed - if not, don't show switcher
+        let currentFlags = NSEvent.modifierFlags
+        if !currentFlags.contains(.option) {
             return
         }
         
         // Check accessibility first
         if !AXIsProcessTrusted() {
-            showAccessibilityAlert()
+            // System will prompt for accessibility - just open settings
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
             return
         }
         
-        var windows = windowManager.getAllWindows()
+        let windows = windowManager.getAllWindows()
         
-        // Sort windows by MRU order using windowID (stable identifier, unlike titles)
-        windows.sort { window1, window2 in
-            let index1 = mruWindowOrder.firstIndex { $0.pid == window1.processIdentifier && $0.windowID == window1.windowID } ?? Int.max
-            let index2 = mruWindowOrder.firstIndex { $0.pid == window2.processIdentifier && $0.windowID == window2.windowID } ?? Int.max
-            
-            return index1 < index2
-        }
+        // Don't show if no windows
+        guard !windows.isEmpty else { return }
+        
+        // Windows are already sorted by CGWindowList order (most recently focused first)
+        // No need for separate MRU tracking - CGWindowList reflects actual macOS window order
         
         // Create state object to track selection
         let state = WindowSwitcherState(windows: windows, onSelect: { [weak self] window in
-            self?.updateMRUOrder(window: window)
             self?.windowManager.focusWindow(window)
             self?.closeWindowSwitcher()
         }, onDismiss: { [weak self] in
@@ -401,9 +401,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentView = WindowSwitcherView(state: state)
         let hostingView = NSHostingView(rootView: contentView)
         
+        // Size the hosting view to get the intrinsic content size
+        hostingView.layoutSubtreeIfNeeded()
+        let fittingSize = hostingView.fittingSize
+        let panelWidth = max(fittingSize.width, 1200)
+        let panelHeight = max(fittingSize.height, 800)
+        
         // Use a regular panel that can become key
         let panel = KeyablePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
             styleMask: [.titled, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -438,6 +444,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func startOptionKeyMonitor() {
         stopOptionKeyMonitor()
+        
+        // Check immediately if Option is already released
+        let currentFlags = NSEvent.modifierFlags
+        if !currentFlags.contains(.option) {
+            DispatchQueue.main.async { [weak self] in
+                self?.selectCurrentAndClose()
+            }
+            return
+        }
         
         // Use both local and global monitors to catch the Option key release
         optionKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
@@ -527,21 +542,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         currentSwitcherState = nil
         windowSwitcherPanel?.close()
         windowSwitcherPanel = nil
-    }
-    
-    private func updateMRUOrder(window: WindowInfo) {
-        let key = (pid: window.processIdentifier, windowID: window.windowID)
-        
-        // Remove if already exists (using windowID for stable identification)
-        mruWindowOrder.removeAll { $0.pid == key.pid && $0.windowID == key.windowID }
-        
-        // Insert at the front
-        mruWindowOrder.insert(key, at: 0)
-        
-        // Keep list reasonable size
-        if mruWindowOrder.count > 50 {
-            mruWindowOrder = Array(mruWindowOrder.prefix(50))
-        }
     }
     
     @objc func openSettings() {

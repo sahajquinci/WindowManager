@@ -34,46 +34,19 @@ class WindowManager {
         var windowInfos: [WindowInfo] = []
         
         // Use CGWindowList to get windows in front-to-back order (most recent first)
-        // Include all windows, not just on-screen ones, to catch hidden/minimized apps
-        let options = CGWindowListOption(arrayLiteral: .optionAll, .excludeDesktopElements)
+        // .optionOnScreenOnly gives proper Z-order (front to back)
+        let options = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
         guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
             return []
         }
         
-        // Build a map of window order and IDs by PID, owner name, bounds
-        struct CGWindowInfo {
-            let pid: pid_t
-            let ownerName: String
-            let name: String
-            let index: Int
-            let windowID: CGWindowID
-            let bounds: CGRect
-            var used: Bool
-        }
-        
-        var cgWindows: [CGWindowInfo] = []
+        // Build a map of window IDs to their order index
+        var windowOrderMap: [CGWindowID: Int] = [:]
         for (index, windowInfo) in windowList.enumerated() {
-            if let pid = windowInfo[kCGWindowOwnerPID as String] as? pid_t,
+            if let windowID = windowInfo[kCGWindowNumber as String] as? CGWindowID,
                let layer = windowInfo[kCGWindowLayer as String] as? Int,
-               let windowID = windowInfo[kCGWindowNumber as String] as? CGWindowID,
                layer == 0 { // Normal window layer
-                let name = windowInfo[kCGWindowName as String] as? String ?? ""
-                let ownerName = windowInfo[kCGWindowOwnerName as String] as? String ?? ""
-                
-                // Get window bounds
-                var bounds = CGRect.zero
-                if let boundsDict = windowInfo[kCGWindowBounds as String] as? [String: Any],
-                   let x = boundsDict["X"] as? CGFloat,
-                   let y = boundsDict["Y"] as? CGFloat,
-                   let width = boundsDict["Width"] as? CGFloat,
-                   let height = boundsDict["Height"] as? CGFloat {
-                    bounds = CGRect(x: x, y: y, width: width, height: height)
-                }
-                
-                cgWindows.append(CGWindowInfo(
-                    pid: pid, ownerName: ownerName, name: name,
-                    index: index, windowID: windowID, bounds: bounds, used: false
-                ))
+                windowOrderMap[windowID] = index
             }
         }
         
@@ -140,12 +113,10 @@ class WindowManager {
                 var windowID: CGWindowID = 0
                 let axResult = _AXUIElementGetWindow(window, &windowID)
                 
-                // Find this window's order in the CGWindowList
+                // Find this window's order in the CGWindowList (front-to-back Z-order)
                 var orderIndex = Int.max
                 if axResult == .success && windowID > 0 {
-                    if let cgIndex = cgWindows.firstIndex(where: { $0.windowID == windowID }) {
-                        orderIndex = cgWindows[cgIndex].index
-                    }
+                    orderIndex = windowOrderMap[windowID] ?? Int.max
                 }
                 
                 // Capture thumbnail for the window (requires Screen Recording permission)

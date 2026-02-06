@@ -1,3 +1,38 @@
+## v1.3.0 - Bug Fixes & Improvements
+
+### Bug Fixes
+- **Magnetic snap disabled by default** - New installations no longer have magnetic snap enabled, preventing unexpected window movements
+- **Multi-monitor snap fix** - Magnetic snap now correctly detects the screen where the cursor is, rather than always using the primary monitor
+- **Window switcher responsiveness** - Quick Option+Tab presses now work correctly; switcher closes immediately when Option is released
+- **Window order accuracy** - Window switcher now reflects actual macOS window order (most recently used first) instead of custom tracking
+- **Removed duplicate permission prompts** - App no longer shows a custom alert before the system accessibility prompt
+- **Screen Recording permission prompt** - App now properly triggers the Screen Recording permission request at startup
+- **Window switcher appearance fixed** - Resolved issue where window switcher wouldn't appear after recent changes
+- **Window switcher sizing** - Panel now correctly sizes to 1200x800 and centers on screen
+
+### Changes
+- Simplified window ordering logic using CGWindowList Z-order
+- Improved Option key monitoring for window switcher
+
+---
+
+## v1.2.0 - Window Switcher Improvements
+
+### Features
+- **Larger window switcher** - Increased to 1200x800 for better visibility
+- **Bigger thumbnails** - Window previews now 300x200 for clearer identification
+- **Improved window matching** - Better handling of Chrome and multi-process apps
+
+---
+
+## v1.1.0 - Enhanced Window Previews
+
+### Features
+- **Live window thumbnails** - Window switcher now shows actual window previews
+- **Screen Recording support** - Added permission request for thumbnail capture
+
+---
+
 ## v1.0.0 - Initial Release
 
 ### Features
